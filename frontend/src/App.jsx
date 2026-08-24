@@ -1,0 +1,101 @@
+import { useEffect, useState, useCallback } from "react";
+import {
+  LayoutDashboard,
+  Server,
+  ListChecks,
+  Activity,
+  UploadCloud,
+  ShieldAlert,
+  ClipboardCheck,
+  GraduationCap,
+} from "lucide-react";
+import { api } from "./api";
+import Dashboard from "./components/Dashboard";
+import WorkerTable from "./components/WorkerTable";
+import TaskTable from "./components/TaskTable";
+import EventsPanel from "./components/EventsPanel";
+import SubmitForm from "./components/SubmitForm";
+import FailurePanel from "./components/FailurePanel";
+import MarkingDashboard from "./components/MarkingDashboard";
+
+const TABS = [
+  { key: "Dashboard", icon: LayoutDashboard },
+  { key: "Workers", icon: Server },
+  { key: "Tasks", icon: ListChecks },
+  { key: "Marking Dashboard", icon: ClipboardCheck },
+  { key: "Events", icon: Activity },
+  { key: "Submit", icon: UploadCloud },
+  { key: "Failure Simulation", icon: ShieldAlert },
+];
+
+export default function App() {
+  const [tab, setTab] = useState("Dashboard");
+  const [state, setState] = useState(null);
+  const [workers, setWorkers] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [electionLogs, setElectionLogs] = useState([]);
+  const [markingSummary, setMarkingSummary] = useState(null);
+  const [connected, setConnected] = useState(true);
+
+  const refreshAll = useCallback(async () => {
+    try {
+      const [s, w, t, e, el, ms] = await Promise.all([
+        api.getState(),
+        api.getWorkers(),
+        api.getTasks(),
+        api.getEvents(),
+        api.getElectionLogs(),
+        api.getMarkingSummary(),
+      ]);
+      setState(s);
+      setWorkers(w);
+      setTasks(t);
+      setEvents(e);
+      setElectionLogs(el);
+      setMarkingSummary(ms);
+      setConnected(true);
+    } catch (err) {
+      setConnected(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshAll();
+    const interval = setInterval(refreshAll, 2000);
+    return () => clearInterval(interval);
+  }, [refreshAll]);
+
+  return (
+    <div className="app">
+      <div className="app-header">
+        <div className="app-header-top">
+          <GraduationCap size={26} />
+          <h1>Distributed Exam Evaluation System</h1>
+        </div>
+        <p className="subtitle">Teacher Dashboard — Coordinator, Workers &amp; Marking, all in one place</p>
+        <span className={`connection-pill ${connected ? "online" : "offline"}`}>
+          <span className="dot" />
+          {connected ? "Connected to Coordinator (localhost:8000)" : "Cannot reach Coordinator — is it running?"}
+        </span>
+      </div>
+
+      <div className="tabs">
+        {TABS.map(({ key, icon: Icon }) => (
+          <div key={key} className={`tab ${tab === key ? "active" : ""}`} onClick={() => setTab(key)}>
+            <Icon />
+            {key}
+          </div>
+        ))}
+      </div>
+
+      {tab === "Dashboard" && <Dashboard state={state} />}
+      {tab === "Workers" && <WorkerTable workers={workers} />}
+      {tab === "Tasks" && <TaskTable tasks={tasks} />}
+      {tab === "Marking Dashboard" && <MarkingDashboard summary={markingSummary} tasks={tasks} />}
+      {tab === "Events" && <EventsPanel events={events} electionLogs={electionLogs} />}
+      {tab === "Submit" && <SubmitForm onSubmitted={refreshAll} />}
+      {tab === "Failure Simulation" && <FailurePanel workers={workers} onAction={refreshAll} />}
+    </div>
+  );
+}
