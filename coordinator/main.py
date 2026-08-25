@@ -1,10 +1,11 @@
+import asyncio
 import json
 import re
 import uuid
 from datetime import datetime
 
 import httpx
-from fastapi import FastAPI, Depends, BackgroundTasks, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, Depends, BackgroundTasks, HTTPException, UploadFile, File, Form, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
@@ -37,6 +38,52 @@ ANSWER_KEY = ["A", "B", "C", "D", "A"]
 CURRENT_COORDINATOR = "Main Coordinator"
 
 
+# ---------- message-oriented / stream-oriented communication ----------
+# Publish/subscribe layer: the coordinator publishes distributed events as
+# messages the moment they happen; connected clients (dashboards) subscribe
+# over a persistent WebSocket connection and receive them as a continuous
+# stream, with no request initiating each individual message. This is
+# independent of the request/response (RPC-style) HTTP calls used elsewhere
+# in the system.
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+        self.loop: asyncio.AbstractEventLoop | None = None
+
+    def set_loop(self, loop: asyncio.AbstractEventLoop):
+        self.loop = loop
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def _broadcast_async(self, message: dict):
+        dead = []
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(message)
+            except Exception:
+                dead.append(connection)
+        for d in dead:
+            self.disconnect(d)
+
+    def publish(self, message: dict):
+        """Publish a message to all subscribers. Safe to call from either the
+        main event loop (request handlers) or a background thread (heartbeat
+        monitor), matching how log_event() is used in both contexts."""
+        if not self.active_connections or self.loop is None:
+            return
+        asyncio.run_coroutine_threadsafe(self._broadcast_async(message), self.loop)
+
+
+manager = ConnectionManager()
+
+
 # ---------- helpers ----------
 
 def log_event(db: Session, event: str, process: str):
@@ -44,6 +91,13 @@ def log_event(db: Session, event: str, process: str):
     ev = models.DistributedEvent(event=event, process=process, lamport_clock=tick)
     db.add(ev)
     db.commit()
+    manager.publish({
+        "type": "event",
+        "event": event,
+        "process": process,
+        "lamport_clock": tick,
+        "timestamp": ev.timestamp.isoformat() if ev.timestamp else None,
+    })
     return tick
 
 
@@ -53,6 +107,13 @@ def log_event_static(db: Session, event: str, process: str):
     ev = models.DistributedEvent(event=event, process=process, lamport_clock=tick)
     db.add(ev)
     db.commit()
+    manager.publish({
+        "type": "event",
+        "event": event,
+        "process": process,
+        "lamport_clock": tick,
+        "timestamp": ev.timestamp.isoformat() if ev.timestamp else None,
+    })
     return tick
 
 
@@ -547,7 +608,29 @@ def lock_status():
 
 @app.on_event("startup")
 def on_startup():
+    manager.set_loop(asyncio.get_event_loop())
     start_heartbeat_monitor(SessionLocal, models.Worker, log_event_static)
+
+
+# ---------- WebSocket: live event stream (message-oriented communication) ----------
+
+@app.websocket("/ws/events")
+async def ws_events(websocket: WebSocket):
+    """Clients (e.g. the teacher dashboard) subscribe here to receive every
+    distributed event pushed the instant it happens, instead of polling
+    /events on a timer. The coordinator is the publisher; each connected
+    client is a subscriber - a simple pub/sub messaging pattern layered on
+    top of a persistent (stream-oriented) WebSocket connection."""
+    await manager.connect(websocket)
+    try:
+        while True:
+            # We don't expect client -> server messages, but keep the socket
+            # alive and detect disconnects.
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    except Exception:
+        manager.disconnect(websocket)
 
 
 @app.get("/")

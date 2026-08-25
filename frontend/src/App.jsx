@@ -37,6 +37,7 @@ export default function App() {
   const [electionLogs, setElectionLogs] = useState([]);
   const [markingSummary, setMarkingSummary] = useState(null);
   const [connected, setConnected] = useState(true);
+  const [liveConnected, setLiveConnected] = useState(false);
 
   const refreshAll = useCallback(async () => {
     try {
@@ -62,9 +63,35 @@ export default function App() {
 
   useEffect(() => {
     refreshAll();
+    // Fallback polling: still used for tabs like Dashboard/Workers/Tasks
+    // that aggregate state rather than append events.
     const interval = setInterval(refreshAll, 2000);
     return () => clearInterval(interval);
   }, [refreshAll]);
+
+  useEffect(() => {
+    // Message-oriented live channel: the coordinator pushes each event the
+    // instant it's logged, so the Events tab updates with zero polling
+    // delay - a genuinely different communication pattern from the
+    // request/response calls above.
+    const close = api.connectEventStream(
+      (message) => {
+        if (message.type === "event") {
+          setEvents((prev) => [
+            {
+              event: message.event,
+              process: message.process,
+              lamport_clock: message.lamport_clock,
+              timestamp: message.timestamp,
+            },
+            ...prev,
+          ].slice(0, 100));
+        }
+      },
+      (isOpen) => setLiveConnected(isOpen)
+    );
+    return close;
+  }, []);
 
   return (
     <div className="app">
@@ -77,6 +104,10 @@ export default function App() {
         <span className={`connection-pill ${connected ? "online" : "offline"}`}>
           <span className="dot" />
           {connected ? "Connected to Coordinator (localhost:8000)" : "Cannot reach Coordinator — is it running?"}
+        </span>
+        <span className={`connection-pill ${liveConnected ? "online" : "offline"}`} style={{ marginLeft: 8 }}>
+          <span className="dot" />
+          {liveConnected ? "Live event stream connected (WebSocket)" : "Live event stream offline"}
         </span>
       </div>
 
