@@ -29,5 +29,5 @@ def evaluate_answers(student_answers: list, answer_key: list):
             }
         )
 
-    score = round((correct / total) * 10)
+    score = correct
     return score, total, breakdown
