@@ -15,10 +15,29 @@ class Worker(Base):
     lamport_clock = Column(Integer, default=0)
 
 
+class Exam(Base):
+    __tablename__ = "exams"
+    id = Column(Integer, primary_key=True, index=True)
+    exam_id = Column(String, unique=True, index=True)
+    name = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    is_active = Column(Integer, default=0)  # 1 = the exam currently accepting submissions
+
+
+class Question(Base):
+    __tablename__ = "questions"
+    id = Column(Integer, primary_key=True, index=True)
+    exam_id = Column(String, index=True)
+    question_number = Column(Integer)
+    question_text = Column(String)
+    correct_answer = Column(String)
+
+
 class Task(Base):
     __tablename__ = "tasks"
     id = Column(Integer, primary_key=True, index=True)
     task_id = Column(String, unique=True, index=True)
+    exam_id = Column(String, index=True, nullable=True)
     student_name = Column(String)
     student_id = Column(String)
     answers = Column(String)

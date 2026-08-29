@@ -1,8 +1,10 @@
 import asyncio
+import io
 import json
 import re
 import uuid
 from datetime import datetime
+from typing import Optional
 
 import httpx
 from fastapi import FastAPI, Depends, BackgroundTasks, HTTPException, UploadFile, File, Form, WebSocket, WebSocketDisconnect
@@ -36,6 +38,7 @@ lock = DistributedLock()
 
 ANSWER_KEY = ["A", "B", "C", "D", "A"]
 CURRENT_COORDINATOR = "Main Coordinator"
+ACTIVE_EXAM_ID = None  # None = legacy mode (no exam scoping yet)
 
 
 # ---------- message-oriented / stream-oriented communication ----------
@@ -150,6 +153,82 @@ def parse_answer_sheet_text(content: str) -> list:
     return answers
 
 
+def parse_question_bank_text(text: str) -> list:
+    """Parses a question bank from plain text extracted from a .txt, .csv,
+    .pdf, or .docx file. Two line formats are accepted:
+
+        1,What is the time complexity of binary search?,B
+        1. What is the time complexity of binary search? - B
+
+    A header row (e.g. "question_number,question_text,correct_answer") is
+    auto-skipped if the first token on line 1 isn't a number.
+    """
+    questions = []
+    lines = [l.strip() for l in text.strip().splitlines() if l.strip()]
+
+    for line_num, line in enumerate(lines, start=1):
+        # CSV style: number,text,answer  (answer is the LAST comma-separated field)
+        if "," in line:
+            parts = [p.strip() for p in line.split(",")]
+            first_token = parts[0].replace(".", "").replace(")", "")
+            if first_token.isdigit() and len(parts) >= 3:
+                q_num = int(first_token)
+                answer = parts[-1].strip().upper()
+                q_text = ",".join(parts[1:-1]).strip()
+                if q_text and answer:
+                    questions.append({
+                        "question_number": q_num,
+                        "question_text": q_text,
+                        "correct_answer": answer,
+                    })
+                continue
+            if line_num == 1:
+                # looked like a header row (e.g. "question_number,question_text,correct_answer")
+                continue
+
+        # "1. Question text - B"  or  "1) Question text – B"
+        match = re.match(
+            r"^(\d+)[\.\)]\s*(.+?)\s*[-–—]\s*([A-Za-z0-9]{1,3})\s*$",
+            line,
+        )
+        if match:
+            questions.append({
+                "question_number": int(match.group(1)),
+                "question_text": match.group(2).strip(),
+                "correct_answer": match.group(3).strip().upper(),
+            })
+
+    return questions
+
+
+def extract_text_from_upload(filename: str, raw: bytes) -> str:
+    """Extracts plain text from an uploaded question-bank file, supporting
+    .txt, .csv, .pdf, and .docx."""
+    lower = filename.lower()
+
+    if lower.endswith(".pdf"):
+        try:
+            from pypdf import PdfReader
+        except ImportError:
+            raise HTTPException(status_code=500, detail="Server is missing the 'pypdf' package needed to read PDF files.")
+        reader = PdfReader(io.BytesIO(raw))
+        return "\n".join((page.extract_text() or "") for page in reader.pages)
+
+    if lower.endswith(".docx"):
+        try:
+            import docx
+        except ImportError:
+            raise HTTPException(status_code=500, detail="Server is missing the 'python-docx' package needed to read Word files.")
+        document = docx.Document(io.BytesIO(raw))
+        return "\n".join(p.text for p in document.paragraphs)
+
+    # .txt, .csv, or anything else: treat as plain text
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw.decode("latin-1", errors="ignore")
+
+
 def create_task_and_dispatch(
     db: Session,
     background_tasks: BackgroundTasks,
@@ -157,10 +236,12 @@ def create_task_and_dispatch(
     student_id: str,
     answers: list,
     source: str = "manual",
+    exam_id: str = None,
 ):
     task_id = str(uuid.uuid4())[:8]
     task = models.Task(
         task_id=task_id,
+        exam_id=exam_id or ACTIVE_EXAM_ID,
         student_name=student_name,
         student_id=student_id,
         answers=",".join(answers),
@@ -377,7 +458,8 @@ async def recover_worker(worker_id: int, db: Session = Depends(get_db)):
 def submit_answer_sheet(sheet: schemas.AnswerSheet, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     answers = [a.strip().upper() for a in sheet.answers.split(",") if a.strip()]
     task_id = create_task_and_dispatch(
-        db, background_tasks, sheet.student_name, sheet.student_id, answers, source="manual"
+        db, background_tasks, sheet.student_name, sheet.student_id, answers,
+        source="manual", exam_id=sheet.exam_id,
     )
     return {"task_id": task_id, "message": "submitted"}
 
@@ -388,7 +470,8 @@ def submit_bulk(payload: schemas.BulkSubmit, background_tasks: BackgroundTasks, 
     for sheet in payload.sheets:
         answers = [a.strip().upper() for a in sheet.answers.split(",") if a.strip()]
         task_id = create_task_and_dispatch(
-            db, background_tasks, sheet.student_name, sheet.student_id, answers, source="manual"
+            db, background_tasks, sheet.student_name, sheet.student_id, answers,
+            source="manual", exam_id=sheet.exam_id,
         )
         task_ids.append(task_id)
     return {"task_ids": task_ids}
@@ -423,11 +506,15 @@ async def submit_file(
 
 
 @app.get("/tasks")
-def list_tasks(db: Session = Depends(get_db)):
-    tasks = db.query(models.Task).order_by(models.Task.id.desc()).all()
+def list_tasks(exam_id: Optional[str] = None, db: Session = Depends(get_db)):
+    query = db.query(models.Task)
+    if exam_id:
+        query = query.filter(models.Task.exam_id == exam_id)
+    tasks = query.order_by(models.Task.id.desc()).all()
     return [
         {
             "task_id": t.task_id,
+            "exam_id": t.exam_id,
             "student_name": t.student_name,
             "student_id": t.student_id,
             "assigned_worker": t.assigned_worker,
@@ -444,10 +531,13 @@ def list_tasks(db: Session = Depends(get_db)):
 
 
 @app.get("/marking-summary")
-def marking_summary(db: Session = Depends(get_db)):
-    """Aggregate marking statistics across all completed tasks - powers the
-    Marking Dashboard on the frontend."""
-    completed = db.query(models.Task).filter(models.Task.status == "COMPLETED").all()
+def marking_summary(exam_id: Optional[str] = None, db: Session = Depends(get_db)):
+    """Aggregate marking statistics across completed tasks - powers the
+    Marking Dashboard on the frontend. Pass ?exam_id=... to scope to one exam."""
+    query = db.query(models.Task).filter(models.Task.status == "COMPLETED")
+    if exam_id:
+        query = query.filter(models.Task.exam_id == exam_id)
+    completed = query.all()
 
     if not completed:
         return {
@@ -464,6 +554,9 @@ def marking_summary(db: Session = Depends(get_db)):
     question_correct_counts = [0] * total_q
     question_attempts = [0] * total_q
 
+    questions = db.query(models.Question).filter(models.Question.exam_id == (exam_id or ACTIVE_EXAM_ID)).all()
+    question_text_by_number = {q.question_number: q.question_text for q in questions}
+
     for t in completed:
         if not t.breakdown:
             continue
@@ -479,6 +572,7 @@ def marking_summary(db: Session = Depends(get_db)):
         {
             "question": i + 1,
             "correct_answer": ANSWER_KEY[i],
+            "question_text": question_text_by_number.get(i + 1),
             "attempts": question_attempts[i],
             "correct": question_correct_counts[i],
             "accuracy_pct": round((question_correct_counts[i] / question_attempts[i]) * 100)
@@ -498,7 +592,7 @@ def marking_summary(db: Session = Depends(get_db)):
     }
 
 
-# ---------- answer key ----------
+# ---------- answer key (legacy, still supported for simple single-exam use) ----------
 
 @app.get("/answer-key")
 def get_answer_key():
@@ -510,6 +604,135 @@ def set_answer_key(payload: schemas.AnswerKeyIn):
     global ANSWER_KEY
     ANSWER_KEY = [a.upper() for a in payload.answer_key]
     return {"answer_key": ANSWER_KEY}
+
+
+# ---------- exams & question bank (multi-exam support) ----------
+
+@app.post("/exams")
+def create_exam(payload: schemas.ExamCreate, db: Session = Depends(get_db)):
+    """Create an exam from a JSON list of questions (used by the manual
+    question-entry form in the frontend)."""
+    exam_id = str(uuid.uuid4())[:8]
+    exam = models.Exam(exam_id=exam_id, name=payload.name, is_active=0)
+    db.add(exam)
+    for q in sorted(payload.questions, key=lambda q: q.question_number):
+        db.add(models.Question(
+            exam_id=exam_id,
+            question_number=q.question_number,
+            question_text=q.question_text,
+            correct_answer=q.correct_answer.upper(),
+        ))
+    db.commit()
+    log_event(db, f"Exam Created: {payload.name} ({exam_id}) - {len(payload.questions)} questions", "Coordinator")
+    return {"exam_id": exam_id, "name": payload.name, "question_count": len(payload.questions)}
+
+
+@app.post("/exams/upload")
+async def upload_exam_questions(
+    name: str = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """Bulk-create an exam's question bank from an uploaded file.
+    Supports .txt, .csv, .pdf, and .docx.
+
+    Expected content, one question per line, either style:
+        1,What is the time complexity of binary search?,B
+        1. What is the time complexity of binary search? - B
+    A CSV header row is auto-skipped if present.
+    """
+    raw = await file.read()
+    text = extract_text_from_upload(file.filename, raw)
+    questions = parse_question_bank_text(text)
+
+    if not questions:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Could not parse any questions from the uploaded file. "
+                "Expected lines like '1,Question text,A' or '1. Question text - A'."
+            ),
+        )
+
+    exam_id = str(uuid.uuid4())[:8]
+    exam = models.Exam(exam_id=exam_id, name=name, is_active=0)
+    db.add(exam)
+    for q in sorted(questions, key=lambda q: q["question_number"]):
+        db.add(models.Question(
+            exam_id=exam_id,
+            question_number=q["question_number"],
+            question_text=q["question_text"],
+            correct_answer=q["correct_answer"],
+        ))
+    db.commit()
+    log_event(db, f"Exam Uploaded: {name} ({exam_id}) - {len(questions)} questions from {file.filename}", "Coordinator")
+    return {"exam_id": exam_id, "name": name, "question_count": len(questions)}
+
+
+@app.get("/exams")
+def list_exams(db: Session = Depends(get_db)):
+    exams = db.query(models.Exam).order_by(models.Exam.created_at.desc()).all()
+    return [
+        {
+            "exam_id": e.exam_id,
+            "name": e.name,
+            "is_active": bool(e.is_active),
+            "created_at": e.created_at.isoformat() if e.created_at else None,
+        }
+        for e in exams
+    ]
+
+
+@app.get("/exams/{exam_id}/questions")
+def get_exam_questions(exam_id: str, db: Session = Depends(get_db)):
+    qs = (
+        db.query(models.Question)
+        .filter(models.Question.exam_id == exam_id)
+        .order_by(models.Question.question_number)
+        .all()
+    )
+    return [
+        {"question_number": q.question_number, "question_text": q.question_text, "correct_answer": q.correct_answer}
+        for q in qs
+    ]
+
+
+@app.post("/exams/activate")
+def activate_exam(payload: schemas.ExamActivate, db: Session = Depends(get_db)):
+    """Marks one exam active: its answer key becomes ANSWER_KEY, and new
+    submissions default to this exam_id unless one is given explicitly."""
+    global ANSWER_KEY, ACTIVE_EXAM_ID
+    exam = db.query(models.Exam).filter(models.Exam.exam_id == payload.exam_id).first()
+    if not exam:
+        raise HTTPException(status_code=404, detail="exam not found")
+
+    db.query(models.Exam).update({models.Exam.is_active: 0})
+    exam.is_active = 1
+    db.commit()
+
+    qs = (
+        db.query(models.Question)
+        .filter(models.Question.exam_id == exam.exam_id)
+        .order_by(models.Question.question_number)
+        .all()
+    )
+    if qs:
+        ANSWER_KEY = [q.correct_answer for q in qs]
+    ACTIVE_EXAM_ID = exam.exam_id
+    log_event(db, f"Exam Activated: {exam.name} ({exam.exam_id})", "Coordinator")
+    return {"active_exam_id": ACTIVE_EXAM_ID, "answer_key": ANSWER_KEY}
+
+
+@app.get("/exams/active")
+def get_active_exam(db: Session = Depends(get_db)):
+    if not ACTIVE_EXAM_ID:
+        return {"active_exam_id": None, "name": None, "answer_key": ANSWER_KEY}
+    exam = db.query(models.Exam).filter(models.Exam.exam_id == ACTIVE_EXAM_ID).first()
+    return {
+        "active_exam_id": ACTIVE_EXAM_ID,
+        "name": exam.name if exam else None,
+        "answer_key": ANSWER_KEY,
+    }
 
 
 # ---------- global state ----------

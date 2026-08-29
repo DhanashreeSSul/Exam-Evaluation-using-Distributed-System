@@ -15,7 +15,7 @@ async function request(path, options = {}) {
 export const api = {
   getState: () => request("/state"),
   getWorkers: () => request("/workers"),
-  getTasks: () => request("/tasks"),
+  getTasks: (examId) => request(examId ? `/tasks?exam_id=${examId}` : "/tasks"),
   getEvents: () => request("/events"),
   getElectionLogs: () => request("/election/logs"),
   getCoordinator: () => request("/coordinator"),
@@ -25,11 +25,12 @@ export const api = {
   submitSheet: (sheet) =>
     request("/submit", { method: "POST", body: JSON.stringify(sheet) }),
 
-  submitFile: async (studentName, studentId, file) => {
+  submitFile: async (studentName, studentId, file, examId) => {
     const formData = new FormData();
     formData.append("student_name", studentName);
     formData.append("student_id", studentId);
     formData.append("file", file);
+    if (examId) formData.append("exam_id", examId);
     const res = await fetch(`${BASE_URL}/submit-file`, {
       method: "POST",
       body: formData,
@@ -41,7 +42,8 @@ export const api = {
     return data;
   },
 
-  getMarkingSummary: () => request("/marking-summary"),
+  getMarkingSummary: (examId) =>
+    request(examId ? `/marking-summary?exam_id=${examId}` : "/marking-summary"),
 
   failWorker: (workerId) =>
     request(`/workers/${workerId}/fail`, { method: "POST" }),
@@ -50,6 +52,32 @@ export const api = {
     request(`/workers/${workerId}/recover`, { method: "POST" }),
 
   startElection: () => request("/election/start", { method: "POST" }),
+
+  // ---------- exams & question bank ----------
+
+  createExam: (name, questions) =>
+    request("/exams", { method: "POST", body: JSON.stringify({ name, questions }) }),
+
+  // Accepts .txt, .csv, .pdf, or .docx - the server auto-detects format
+  // from the file extension and extracts question text accordingly.
+  uploadExamFile: async (name, file) => {
+    const formData = new FormData();
+    formData.append("name", name);
+    formData.append("file", file);
+    const res = await fetch(`${BASE_URL}/exams/upload`, {
+      method: "POST",
+      body: formData,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Upload failed");
+    return data;
+  },
+
+  listExams: () => request("/exams"),
+  getExamQuestions: (examId) => request(`/exams/${examId}/questions`),
+  activateExam: (examId) =>
+    request("/exams/activate", { method: "POST", body: JSON.stringify({ exam_id: examId }) }),
+  getActiveExam: () => request("/exams/active"),
 
   // Message-oriented / stream-oriented channel: opens a persistent WebSocket
   // to the coordinator and invokes onEvent(message) for every event the

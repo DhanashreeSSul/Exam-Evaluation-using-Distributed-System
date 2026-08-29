@@ -15,6 +15,7 @@ class AnswerSheet(BaseModel):
     student_name: str
     student_id: str
     answers: str  # comma separated e.g. "A,B,C,D,A"
+    exam_id: Optional[str] = None
 
 
 class BulkSubmit(BaseModel):
@@ -27,3 +28,18 @@ class AnswerKeyIn(BaseModel):
 
 class LockRequest(BaseModel):
     worker_id: int
+
+
+class QuestionIn(BaseModel):
+    question_number: int
+    question_text: str
+    correct_answer: str
+
+
+class ExamCreate(BaseModel):
+    name: str
+    questions: List[QuestionIn]
+
+
+class ExamActivate(BaseModel):
+    exam_id: str

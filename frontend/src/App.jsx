@@ -8,6 +8,7 @@ import {
   ShieldAlert,
   ClipboardCheck,
   GraduationCap,
+  FileText,
 } from "lucide-react";
 import { api } from "./api";
 import Dashboard from "./components/Dashboard";
@@ -17,12 +18,14 @@ import EventsPanel from "./components/EventsPanel";
 import SubmitForm from "./components/SubmitForm";
 import FailurePanel from "./components/FailurePanel";
 import MarkingDashboard from "./components/MarkingDashboard";
+import ExamManager from "./components/ExamManager";
 
 const TABS = [
   { key: "Dashboard", icon: LayoutDashboard },
   { key: "Workers", icon: Server },
   { key: "Tasks", icon: ListChecks },
   { key: "Marking Dashboard", icon: ClipboardCheck },
+  { key: "Exams", icon: FileText },
   { key: "Events", icon: Activity },
   { key: "Submit", icon: UploadCloud },
   { key: "Failure Simulation", icon: ShieldAlert },
@@ -124,6 +127,7 @@ export default function App() {
       {tab === "Workers" && <WorkerTable workers={workers} />}
       {tab === "Tasks" && <TaskTable tasks={tasks} />}
       {tab === "Marking Dashboard" && <MarkingDashboard summary={markingSummary} tasks={tasks} />}
+      {tab === "Exams" && <ExamManager onExamActivated={refreshAll} />}
       {tab === "Events" && <EventsPanel events={events} electionLogs={electionLogs} />}
       {tab === "Submit" && <SubmitForm onSubmitted={refreshAll} />}
       {tab === "Failure Simulation" && <FailurePanel workers={workers} onAction={refreshAll} />}

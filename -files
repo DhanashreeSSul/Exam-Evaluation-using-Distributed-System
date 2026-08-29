@@ -1,0 +1,40 @@
+[33m16c9307[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Added my new files
+ README.md                  | 230 [32m+++++++++++++++++++++++[m[31m----------------------[m
+ frontend/package-lock.json |   4 [32m+[m
+ worker/evaluator.py        |   2 [32m+[m[31m-[m
+ 3 files changed, 125 insertions(+), 111 deletions(-)
+[33m333f33d[m al
+ .gitignore                                   |   15 [32m+[m
+ coordinator/database.py                      |   24 [32m+[m
+ coordinator/distributed_lock.py              |   35 [32m+[m
+ coordinator/election.py                      |   24 [32m+[m
+ coordinator/heartbeat.py                     |   32 [32m+[m
+ coordinator/lamport_clock.py                 |   26 [32m+[m
+ coordinator/load_balancer.py                 |   17 [32m+[m
+ coordinator/main.py                          |  555 [32m+++++++++[m
+ coordinator/models.py                        |   59 [32m+[m
+ coordinator/requirements.txt                 |    6 [32m+[m
+ coordinator/schemas.py                       |   29 [32m+[m
+ frontend/index.html                          |   12 [32m+[m
+ frontend/package-lock.json                   | 1708 [32m++++++++++++++++++++++++++[m
+ frontend/package.json                        |   20 [32m+[m
+ frontend/src/App.jsx                         |  101 [32m++[m
+ frontend/src/api.js                          |   52 [32m+[m
+ frontend/src/components/Dashboard.jsx        |   48 [32m+[m
+ frontend/src/components/EventsPanel.jsx      |   66 [32m+[m
+ frontend/src/components/FailurePanel.jsx     |   73 [32m++[m
+ frontend/src/components/MarkingDashboard.jsx |  124 [32m++[m
+ frontend/src/components/SubmitForm.jsx       |  201 [32m+++[m
+ frontend/src/components/TaskTable.jsx        |   58 [32m+[m
+ frontend/src/components/WorkerTable.jsx      |   52 [32m+[m
+ frontend/src/index.css                       |  542 [32m++++++++[m
+ frontend/src/main.jsx                        |   10 [32m+[m
+ frontend/vite.config.js                      |    9 [32m+[m
+ worker/evaluator.py                          |   33 [32m+[m
+ worker/lamport_clock.py                      |   24 [32m+[m
+ worker/requirements.txt                      |    4 [32m+[m
+ worker/worker.py                             |  123 [32m++[m
+ 30 files changed, 4082 insertions(+)
+[33m0ef9c49[m first commit
+ README.md | 305 [32m++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++[m
+ 1 file changed, 305 insertions(+)
