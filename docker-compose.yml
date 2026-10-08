@@ -1,0 +1,55 @@
+services:
+  coordinator:
+    build: ./coordinator
+    container_name: coordinator
+    ports:
+      - "8000:8000"
+    networks:
+      - exam-net
+
+  worker1:
+    build: ./worker
+    container_name: worker1
+    command: ["python", "worker.py", "--id", "1", "--port", "8001", "--host", "worker1", "--coordinator", "http://coordinator:8000"]
+    ports:
+      - "8001:8001"
+    depends_on:
+      - coordinator
+    networks:
+      - exam-net
+
+  worker2:
+    build: ./worker
+    container_name: worker2
+    command: ["python", "worker.py", "--id", "2", "--port", "8002", "--host", "worker2", "--coordinator", "http://coordinator:8000"]
+    ports:
+      - "8002:8002"
+    depends_on:
+      - coordinator
+    networks:
+      - exam-net
+
+  worker3:
+    build: ./worker
+    container_name: worker3
+    command: ["python", "worker.py", "--id", "3", "--port", "8003", "--host", "worker3", "--coordinator", "http://coordinator:8000"]
+    ports:
+      - "8003:8003"
+    depends_on:
+      - coordinator
+    networks:
+      - exam-net
+
+  frontend:
+    build: ./frontend
+    container_name: frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - coordinator
+    networks:
+      - exam-net
+
+networks:
+  exam-net:
+    driver: bridge

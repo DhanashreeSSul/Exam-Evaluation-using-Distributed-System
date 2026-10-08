@@ -19,6 +19,10 @@ import SubmitForm from "./components/SubmitForm";
 import FailurePanel from "./components/FailurePanel";
 import MarkingDashboard from "./components/MarkingDashboard";
 import ExamManager from "./components/ExamManager";
+import SynchronizationPanel from "./components/SynchronizationPanel";
+import { GitBranch } from "lucide-react";
+import LedgerPanel from "./components/LedgerPanel";
+import { Link2 } from "lucide-react";
 
 const TABS = [
   { key: "Dashboard", icon: LayoutDashboard },
@@ -29,6 +33,8 @@ const TABS = [
   { key: "Events", icon: Activity },
   { key: "Submit", icon: UploadCloud },
   { key: "Failure Simulation", icon: ShieldAlert },
+  { key: "Sync", icon: GitBranch },
+  { key: "Ledger", icon: Link2 }
 ];
 
 export default function App() {
@@ -131,6 +137,8 @@ export default function App() {
       {tab === "Events" && <EventsPanel events={events} electionLogs={electionLogs} />}
       {tab === "Submit" && <SubmitForm onSubmitted={refreshAll} />}
       {tab === "Failure Simulation" && <FailurePanel workers={workers} onAction={refreshAll} />}
+      {tab === "Sync" && <SynchronizationPanel />}
+      {tab === "Ledger" && <LedgerPanel />}
     </div>
   );
 }

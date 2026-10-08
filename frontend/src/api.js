@@ -74,10 +74,17 @@ export const api = {
   },
 
   listExams: () => request("/exams"),
-  getExamQuestions: (examId) => request(`/exams/${examId}/questions`),
+  getExamQuestions: (examId, revealAnswers = false) =>
+    request(`/exams/${examId}/questions${revealAnswers ? "?reveal_answers=true" : ""}`),
   activateExam: (examId) =>
     request("/exams/activate", { method: "POST", body: JSON.stringify({ exam_id: examId }) }),
   getActiveExam: () => request("/exams/active"),
+
+  // ---------- manual review ----------
+  // Read-only task detail view (question text joined in), used by an
+  // optional "view submission" screen. Does not touch task dispatch, load
+  // balancing, or any other DS mechanism.
+  getTaskDetail: (taskId) => request(`/tasks/${taskId}`),
 
   // Message-oriented / stream-oriented channel: opens a persistent WebSocket
   // to the coordinator and invokes onEvent(message) for every event the

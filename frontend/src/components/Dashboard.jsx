@@ -1,5 +1,10 @@
 import { LayoutDashboard, Server, ServerCrash, Crown, Clock3 } from "lucide-react";
 
+// FA1 covers Unit 1 & 2 only. Lamport clocks are a Unit 3 concept, so this
+// stat is hidden for now - flip to true to show it again for FA2 without
+// touching any backend logic (the clock keeps running either way).
+const SHOW_UNIT_3_4 = true;
+
 export default function Dashboard({ state }) {
   if (!state) return <p className="muted">Loading global state...</p>;
 
@@ -31,9 +36,11 @@ export default function Dashboard({ state }) {
         <span className="connection-pill" style={{ background: "var(--accent-light)", color: "var(--accent-dark)" }}>
           <Crown size={14} /> Coordinator: <strong>{state.current_coordinator}</strong>
         </span>
-        <span className="connection-pill" style={{ background: "var(--accent-light)", color: "var(--accent-dark)" }}>
-          <Clock3 size={14} /> Lamport Clock: <strong>{state.lamport_clock}</strong>
-        </span>
+        {SHOW_UNIT_3_4 && (
+          <span className="connection-pill" style={{ background: "var(--accent-light)", color: "var(--accent-dark)" }}>
+            <Clock3 size={14} /> Lamport Clock: <strong>{state.lamport_clock}</strong>
+          </span>
+        )}
         <span className="connection-pill" style={{ background: "var(--accent-light)", color: "var(--accent-dark)" }}>
           <Server size={14} /> Active: <strong>{state.active_workers}</strong>
         </span>

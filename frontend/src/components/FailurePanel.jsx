@@ -2,6 +2,11 @@ import { useState } from "react";
 import { ShieldAlert, Vote as VoteIcon } from "lucide-react";
 import { api } from "../api";
 
+// FA1 covers Unit 1 & 2 only. Leader election (Bully algorithm) is a Unit 3
+// concept, so its button is hidden for now. Flip to true for FA2 - the
+// /election/start endpoint and logic are untouched either way.
+const SHOW_UNIT_3_4 = true;
+
 export default function FailurePanel({ workers, onAction }) {
   const [message, setMessage] = useState("");
 
@@ -62,11 +67,13 @@ export default function FailurePanel({ workers, onAction }) {
           </button>
         ))}
       </div>
-      <div className="button-row">
-        <button onClick={election}>
-          <VoteIcon size={14} /> Simulate Coordinator Failure / Start Election
-        </button>
-      </div>
+      {SHOW_UNIT_3_4 && (
+        <div className="button-row">
+          <button onClick={election}>
+            <VoteIcon size={14} /> Simulate Coordinator Failure / Start Election
+          </button>
+        </div>
+      )}
       {message && <div className="message-box info">{message}</div>}
     </div>
   );

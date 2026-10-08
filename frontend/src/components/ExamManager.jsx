@@ -6,6 +6,9 @@ export default function ExamManager({ onExamActivated }) {
   const [exams, setExams] = useState([]);
   const [activeExam, setActiveExam] = useState(null);
   const [message, setMessage] = useState("");
+  const [expandedExamId, setExpandedExamId] = useState(null);
+  const [expandedQuestions, setExpandedQuestions] = useState([]);
+  const [loadingQuestions, setLoadingQuestions] = useState(false);
 
   // upload form state
   const [uploadExamName, setUploadExamName] = useState("");
@@ -16,7 +19,7 @@ export default function ExamManager({ onExamActivated }) {
   const [showManual, setShowManual] = useState(false);
   const [examName, setExamName] = useState("");
   const [questions, setQuestions] = useState([
-    { question_number: 1, question_text: "", correct_answer: "" },
+    { question_number: 1, question_text: "", option_a: "", option_b: "", option_c: "", option_d: "", correct_answer: "" },
   ]);
 
   const refresh = async () => {
@@ -56,7 +59,7 @@ export default function ExamManager({ onExamActivated }) {
   const addQuestionRow = () => {
     setQuestions((prev) => [
       ...prev,
-      { question_number: prev.length + 1, question_text: "", correct_answer: "" },
+      { question_number: prev.length + 1, question_text: "", option_a: "", option_b: "", option_c: "", option_d: "", correct_answer: "" },
     ]);
   };
 
@@ -87,7 +90,7 @@ export default function ExamManager({ onExamActivated }) {
       const result = await api.createExam(examName.trim(), cleaned);
       setMessage(`Exam "${examName}" created with ${result.question_count} questions.`);
       setExamName("");
-      setQuestions([{ question_number: 1, question_text: "", correct_answer: "" }]);
+      setQuestions([{ question_number: 1, question_text: "", option_a: "", option_b: "", option_c: "", option_d: "", correct_answer: "" }]);
       refresh();
     } catch (err) {
       setMessage("Failed to create exam: " + err.message);
@@ -99,6 +102,24 @@ export default function ExamManager({ onExamActivated }) {
     setMessage("Exam activated — new submissions will be marked against this question set.");
     refresh();
     onExamActivated && onExamActivated();
+  };
+
+  const handleToggleView = async (examId) => {
+    if (expandedExamId === examId) {
+      setExpandedExamId(null);
+      setExpandedQuestions([]);
+      return;
+    }
+    setExpandedExamId(examId);
+    setLoadingQuestions(true);
+    try {
+      const qs = await api.getExamQuestions(examId);
+      setExpandedQuestions(qs);
+    } catch (err) {
+      setMessage("Failed to load questions: " + err.message);
+    } finally {
+      setLoadingQuestions(false);
+    }
   };
 
   return (
@@ -123,11 +144,14 @@ export default function ExamManager({ onExamActivated }) {
       <h3 style={{ fontSize: 15 }}>Upload Question Bank</h3>
       <p className="muted" style={{ fontSize: 13, marginBottom: 8 }}>
         Accepts <strong>.txt</strong>, <strong>.csv</strong>, <strong>.pdf</strong>, or{" "}
-        <strong>.docx</strong>. One question per line, either style:
+        <strong>.docx</strong>. Preferred format — a numbered question with
+        options and an answer line:
         <br />
-        <code>1,What is the time complexity of binary search?,B</code>
+        <code>1. What is the time complexity of binary search?</code>
         <br />
-        <code>1. What is the time complexity of binary search? - B</code>
+        <code>A. O(n)&nbsp;&nbsp;B. O(log n)&nbsp;&nbsp;C. O(n^2)&nbsp;&nbsp;D. O(1)</code>
+        <br />
+        <code>Answer: B</code>
       </p>
       <form
         onSubmit={handleFileUpload}
@@ -170,25 +194,33 @@ export default function ExamManager({ onExamActivated }) {
           />
 
           {questions.map((q, idx) => (
-            <div key={idx} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
-              <span style={{ width: 24 }}>{q.question_number}.</span>
-              <input
-                type="text"
-                placeholder="Question text"
-                value={q.question_text}
-                onChange={(e) => updateQuestion(idx, "question_text", e.target.value)}
-                style={{ flex: 3 }}
-              />
-              <input
-                type="text"
-                placeholder="Answer"
-                value={q.correct_answer}
-                onChange={(e) => updateQuestion(idx, "correct_answer", e.target.value)}
-                style={{ flex: 1, maxWidth: 80 }}
-              />
-              <button type="button" className="btn-small danger" onClick={() => removeQuestionRow(idx)}>
-                <Trash2 size={14} />
-              </button>
+            <div key={idx} style={{ marginBottom: 14, paddingBottom: 10, borderBottom: "1px solid #eee" }}>
+              <div style={{ display: "flex", gap: 8, marginBottom: 6, alignItems: "center" }}>
+                <span style={{ width: 24 }}>{q.question_number}.</span>
+                <input
+                  type="text"
+                  placeholder="Question text"
+                  value={q.question_text}
+                  onChange={(e) => updateQuestion(idx, "question_text", e.target.value)}
+                  style={{ flex: 1 }}
+                />
+                <button type="button" className="btn-small danger" onClick={() => removeQuestionRow(idx)}>
+                  <Trash2 size={14} />
+                </button>
+              </div>
+              <div style={{ display: "flex", gap: 6, paddingLeft: 32, flexWrap: "wrap" }}>
+                <input type="text" placeholder="Option A" value={q.option_a} onChange={(e) => updateQuestion(idx, "option_a", e.target.value)} style={{ flex: 1, minWidth: 100 }} />
+                <input type="text" placeholder="Option B" value={q.option_b} onChange={(e) => updateQuestion(idx, "option_b", e.target.value)} style={{ flex: 1, minWidth: 100 }} />
+                <input type="text" placeholder="Option C" value={q.option_c} onChange={(e) => updateQuestion(idx, "option_c", e.target.value)} style={{ flex: 1, minWidth: 100 }} />
+                <input type="text" placeholder="Option D" value={q.option_d} onChange={(e) => updateQuestion(idx, "option_d", e.target.value)} style={{ flex: 1, minWidth: 100 }} />
+                <input
+                  type="text"
+                  placeholder="Correct (A/B/C/D)"
+                  value={q.correct_answer}
+                  onChange={(e) => updateQuestion(idx, "correct_answer", e.target.value)}
+                  style={{ width: 110 }}
+                />
+              </div>
             </div>
           ))}
 
@@ -205,6 +237,9 @@ export default function ExamManager({ onExamActivated }) {
       {message && <p className="muted" style={{ marginBottom: 16 }}>{message}</p>}
 
       <h3 style={{ fontSize: 15 }}>Existing Exams</h3>
+      <p className="muted" style={{ fontSize: 13, marginBottom: 8 }}>
+        Click an exam's name to view its question paper.
+      </p>
       <table>
         <thead>
           <tr>
@@ -221,24 +256,62 @@ export default function ExamManager({ onExamActivated }) {
             </tr>
           )}
           {exams.map((e) => (
-            <tr key={e.exam_id}>
-              <td>{e.name}</td>
-              <td>{e.exam_id}</td>
-              <td>
-                {e.is_active ? (
-                  <span className="badge good">ACTIVE</span>
-                ) : (
-                  <span className="muted">inactive</span>
-                )}
-              </td>
-              <td>
-                {!e.is_active && (
-                  <button className="btn-small" onClick={() => handleActivate(e.exam_id)}>
-                    <CheckCircle2 size={14} /> Activate
-                  </button>
-                )}
-              </td>
-            </tr>
+            <>
+              <tr key={e.exam_id}>
+                <td>
+                  <span
+                    onClick={() => handleToggleView(e.exam_id)}
+                    style={{ cursor: "pointer", textDecoration: "underline", fontWeight: 600 }}
+                  >
+                    {e.name}
+                  </span>
+                </td>
+                <td>{e.exam_id}</td>
+                <td>
+                  {e.is_active ? (
+                    <span className="badge good">ACTIVE</span>
+                  ) : (
+                    <span className="muted">inactive</span>
+                  )}
+                </td>
+                <td>
+                  {!e.is_active && (
+                    <button className="btn-small" onClick={() => handleActivate(e.exam_id)}>
+                      <CheckCircle2 size={14} /> Activate
+                    </button>
+                  )}
+                </td>
+              </tr>
+              {expandedExamId === e.exam_id && (
+                <tr>
+                  <td colSpan="4" style={{ background: "rgba(0,0,0,0.02)" }}>
+                    {loadingQuestions ? (
+                      <p className="muted">Loading questions…</p>
+                    ) : expandedQuestions.length === 0 ? (
+                      <p className="muted">No questions found for this exam.</p>
+                    ) : (
+                      <div style={{ padding: "8px 4px" }}>
+                        {expandedQuestions.map((q) => (
+                          <div key={q.question_number} style={{ marginBottom: 14 }}>
+                            <div style={{ fontWeight: 600 }}>
+                              {q.question_number}. {q.question_text}
+                            </div>
+                            {(q.option_a || q.option_b || q.option_c || q.option_d) && (
+                              <div style={{ paddingLeft: 16, marginTop: 4, fontSize: 14 }}>
+                                {q.option_a && <div>A. {q.option_a}</div>}
+                                {q.option_b && <div>B. {q.option_b}</div>}
+                                {q.option_c && <div>C. {q.option_c}</div>}
+                                {q.option_d && <div>D. {q.option_d}</div>}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              )}
+            </>
           ))}
         </tbody>
       </table>

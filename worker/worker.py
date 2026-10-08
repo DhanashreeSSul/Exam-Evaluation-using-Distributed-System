@@ -1,3 +1,6 @@
+# ============================================
+# worker/worker.py — FULL FILE (with --host added)
+# ============================================
 import argparse
 import random
 import threading
@@ -15,7 +18,7 @@ from lamport_clock import LamportClock
 app = FastAPI(title="Exam Evaluation Worker")
 
 clock = LamportClock()
-state = {"status": "ACTIVE", "worker_id": None, "port": None, "coordinator": None}
+state = {"status": "ACTIVE", "worker_id": None, "port": None, "coordinator": None, "host": None}
 
 
 class EvaluateRequest(BaseModel):
@@ -35,7 +38,7 @@ def evaluate(req: EvaluateRequest):
     clock.tick()  # "evaluation started" event
 
     # Artificial delay so parallel processing is visible across workers
-    time.sleep(random.uniform(2, 5))
+    time.sleep(random.uniform(6, 10))
 
     student_answers = req.answers.split(",")
     score, total, breakdown = evaluate_answers(student_answers, req.answer_key)
@@ -75,30 +78,29 @@ def status():
     }
 
 
-def heartbeat_loop(coordinator_url: str, worker_id: int):
+registered = {"done": False}
+
+def heartbeat_loop(coordinator_url: str, worker_id: int, port: int, host: str):
     while True:
         try:
-            if state["status"] == "ACTIVE":
+            if not registered["done"]:
+                resp = requests.post(
+                    f"{coordinator_url}/workers/register",
+                    json={"worker_id": worker_id, "port": port, "host": host},
+                    timeout=3,
+                )
+                if resp.status_code == 200:
+                    registered["done"] = True
+                    print(f"[Worker {worker_id}] Registered with coordinator at {coordinator_url}")
+            elif state["status"] == "ACTIVE":
                 requests.post(
                     f"{coordinator_url}/workers/{worker_id}/heartbeat",
                     json={"lamport_clock": clock.value},
                     timeout=2,
                 )
         except Exception:
-            pass  # coordinator might be temporarily unreachable; keep trying
-        time.sleep(3)
-
-
-def register_with_coordinator(coordinator_url: str, worker_id: int, port: int):
-    try:
-        requests.post(
-            f"{coordinator_url}/workers/register",
-            json={"worker_id": worker_id, "port": port},
-            timeout=3,
-        )
-        print(f"[Worker {worker_id}] Registered with coordinator at {coordinator_url}")
-    except Exception as e:
-        print(f"[Worker {worker_id}] Could not register with coordinator: {e}")
+            pass
+        time.sleep(1)
 
 
 if __name__ == "__main__":
@@ -106,16 +108,16 @@ if __name__ == "__main__":
     parser.add_argument("--id", type=int, required=True, help="Unique worker ID")
     parser.add_argument("--port", type=int, required=True, help="Port to run this worker on")
     parser.add_argument("--coordinator", type=str, default="http://localhost:8000", help="Coordinator base URL")
+    parser.add_argument("--host", type=str, default="localhost", help="Hostname this worker is reachable at")
     args = parser.parse_args()
 
     state["worker_id"] = args.id
     state["port"] = args.port
     state["coordinator"] = args.coordinator
-
-    register_with_coordinator(args.coordinator, args.id, args.port)
+    state["host"] = args.host
 
     heartbeat_thread = threading.Thread(
-        target=heartbeat_loop, args=(args.coordinator, args.id), daemon=True
+        target=heartbeat_loop, args=(args.coordinator, args.id, args.port, args.host), daemon=True
     )
     heartbeat_thread.start()
 

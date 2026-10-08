@@ -2,8 +2,8 @@ import threading
 import time
 from datetime import datetime, timedelta
 
-HEARTBEAT_TIMEOUT_SECONDS = 8
-CHECK_INTERVAL_SECONDS = 3
+HEARTBEAT_TIMEOUT_SECONDS = 4
+CHECK_INTERVAL_SECONDS = 1
 
 
 def start_heartbeat_monitor(session_factory, worker_model, log_event_func):
