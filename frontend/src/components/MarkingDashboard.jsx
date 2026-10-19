@@ -26,15 +26,15 @@ export default function MarkingDashboard({ summary, tasks }) {
           </div>
           <div className="stat-card good">
             <div className="label">Average Score</div>
-            <div className="value">{summary.average_score} / 10</div>
+            <div className="value">{summary.average_score} / {summary.total_questions}</div>
           </div>
           <div className="stat-card good">
             <div className="label">Highest Score</div>
-            <div className="value">{summary.highest_score} / 10</div>
+            <div className="value">{summary.highest_score} / {summary.total_questions}</div>
           </div>
           <div className="stat-card bad">
             <div className="label">Lowest Score</div>
-            <div className="value">{summary.lowest_score} / 10</div>
+            <div className="value">{summary.lowest_score} / {summary.total_questions}</div>
           </div>
         </div>
 

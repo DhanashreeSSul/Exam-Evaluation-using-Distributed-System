@@ -38,8 +38,8 @@ export default function FailurePanel({ workers, onAction }) {
     try {
       const res = await api.startElection();
       setMessage(
-        res.new_coordinator
-          ? `New Coordinator: ${res.new_coordinator}`
+        res.winner != null
+          ? `New Coordinator: Worker ${res.winner}`
           : "Election failed - no active workers."
       );
       onAction && onAction();

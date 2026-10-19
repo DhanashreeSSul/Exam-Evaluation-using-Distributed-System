@@ -9,7 +9,7 @@ from typing import List
 
 import requests
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from evaluator import evaluate_answers
@@ -32,13 +32,16 @@ class EvaluateRequest(BaseModel):
 @app.post("/evaluate")
 def evaluate(req: EvaluateRequest):
     if state["status"] != "ACTIVE":
-        return {"task_id": req.task_id, "status": "rejected", "reason": "worker is down"}
+        raise HTTPException(status_code=503, detail="worker is down")
 
     clock.update(req.lamport_clock)
     clock.tick()  # "evaluation started" event
 
     # Artificial delay so parallel processing is visible across workers
     time.sleep(random.uniform(6, 10))
+
+    if state["status"] != "ACTIVE":
+        raise HTTPException(status_code=503, detail="worker failed during evaluation")
 
     student_answers = req.answers.split(",")
     score, total, breakdown = evaluate_answers(student_answers, req.answer_key)

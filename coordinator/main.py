@@ -323,6 +323,9 @@ def evaluate_task_background(task_id: str):
                     worker.host, worker.port, task_id, task.student_id, task.answers, answer_key, task.lamport_clock
                 ))
 
+                if result.get("status") != "completed":
+                    raise Exception("Worker did not complete the task")
+                
                 task.score = result.get("score")
                 task.breakdown = json.dumps(result.get("breakdown", []))
                 task.status = "COMPLETED"
@@ -415,16 +418,38 @@ def fail_worker(worker_id: int, db: Session = Depends(get_db)):
     worker = db.query(models.Worker).filter(models.Worker.worker_id == worker_id).first()
     if not worker:
         raise HTTPException(status_code=404, detail="Worker not found")
+
+    # Tasks currently running on this worker; the retry loop will move them
+    in_flight = [
+        t.task_id for t in db.query(models.Task).filter(
+            models.Task.assigned_worker == worker_id,
+            models.Task.status == "PROCESSING",
+        ).all()
+    ]
+
     worker.status = "FAILED"
     db.commit()
+
+    # Make the worker really stop: it stops heartbeating and aborts its tasks
+    try:
+        httpx.post(f"http://{worker.host}:{worker.port}/simulate-failure", timeout=3.0)
+    except Exception:
+        pass  # worker already unreachable, which is also a failure
+
     log_event(db, f"WORKER_FAILED:{worker_id}", "coordinator")
-    return {"status": "failed", "worker_id": worker_id}
+    return {"status": "failed", "worker_id": worker_id, "reassigned_tasks": in_flight}
 
 @app.post("/workers/{worker_id}/recover")
 def recover_worker(worker_id: int, db: Session = Depends(get_db)):
     worker = db.query(models.Worker).filter(models.Worker.worker_id == worker_id).first()
     if not worker:
         raise HTTPException(status_code=404, detail="Worker not found")
+
+    try:
+        httpx.post(f"http://{worker.host}:{worker.port}/recover", timeout=3.0)
+    except Exception:
+        pass  # if the process is dead, the heartbeat monitor will fail it again
+
     worker.status = "ACTIVE"
     worker.last_heartbeat = datetime.utcnow()
     db.commit()
@@ -448,7 +473,9 @@ def submit_bulk(payload: schemas.BulkSubmit, background_tasks: BackgroundTasks, 
 
 @app.post("/submit-file")
 async def submit_file(background_tasks: BackgroundTasks, file: UploadFile = File(...),
-                       exam_id: Optional[str] = Form(None), db: Session = Depends(get_db)):
+                      student_name: Optional[str] = Form(None),
+                      student_id: Optional[str] = Form(None),
+                      exam_id: Optional[str] = Form(None), db: Session = Depends(get_db)):
     raw = await file.read()
     text = extract_text_from_upload(file.filename, raw)
 
@@ -479,6 +506,14 @@ async def submit_file(background_tasks: BackgroundTasks, file: UploadFile = File
     if current.get("student_name"):
         current["answers"] = ",".join(answer_list)
         sheets.append(current)
+
+    # Single-student file with only "Question N: X" lines: use the form fields
+    if not sheets and answer_list:
+        sheets.append({
+            "student_name": student_name or "Unknown",
+            "student_id": student_id or "N/A",
+            "answers": ",".join(answer_list),
+        })
 
     task_ids = []
     for s in sheets:
@@ -558,11 +593,17 @@ def marking_summary(exam_id: Optional[str] = None, db: Session = Depends(get_db)
         for qn in sorted(per_question_total.keys())
     ]
 
-    avg_score = round(sum(t.score for t in tasks) / len(tasks), 2) if tasks else 0
+    scores = [t.score for t in tasks if t.score is not None]
+    avg_score = round(sum(scores) / len(scores), 2) if scores else 0
+    total_questions = max((t.total for t in tasks if t.total), default=0)
 
     return {
         "total_submissions": len(tasks),
+        "evaluated_count": len(tasks),
         "average_score": avg_score,
+        "highest_score": max(scores) if scores else 0,
+        "lowest_score": min(scores) if scores else 0,
+        "total_questions": total_questions,
         "question_stats": question_stats,
         "students": [
             {

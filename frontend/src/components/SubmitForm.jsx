@@ -61,8 +61,10 @@ export default function SubmitForm({ onSubmitted }) {
     try {
       const res = await api.submitFile(uploadName, uploadId, file);
       setMessage({
-        type: "success",
-        text: `Uploaded and submitted — Task ID: ${res.task_id}. Parsed answers: ${res.parsed_answers.join(", ")}`,
+        type: res.count > 0 ? "success" : "error",
+        text: res.count > 0
+          ? `Uploaded and submitted ${res.count} answer sheet(s). Task ID(s): ${res.task_ids.join(", ")}`
+          : "No answer sheets found in the file. Check the format.",
       });
       setUploadName("");
       setUploadId("");
