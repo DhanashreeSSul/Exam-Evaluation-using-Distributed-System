@@ -107,17 +107,28 @@ export default function SubmitForm({ onSubmitted }) {
           <div className="form-row">
             <div style={{ flex: 1, minWidth: 160 }}>
               <label className="field-label">Student Name</label>
-              <input placeholder="e.g. Alice Sharma" value={name} onChange={(e) => setName(e.target.value)} />
+              <input
+                style={{ width: "100%" }}
+                placeholder="e.g. Alice Sharma"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
             </div>
             <div style={{ flex: 1, minWidth: 160 }}>
               <label className="field-label">Student ID</label>
-              <input placeholder="e.g. S101" value={studentId} onChange={(e) => setStudentId(e.target.value)} />
+              <input
+                style={{ width: "100%" }}
+                placeholder="e.g. S101"
+                value={studentId}
+                onChange={(e) => setStudentId(e.target.value)}
+              />
             </div>
           </div>
           <div className="form-row">
             <div style={{ flex: 1 }}>
               <label className="field-label">Answers (comma separated)</label>
               <input
+                style={{ width: "100%", fontFamily: "var(--font-mono)" }}
                 placeholder="A,B,C,D,A"
                 value={answers}
                 onChange={(e) => setAnswers(e.target.value)}
@@ -136,6 +147,7 @@ export default function SubmitForm({ onSubmitted }) {
             <div style={{ flex: 1, minWidth: 160 }}>
               <label className="field-label">Student Name</label>
               <input
+                style={{ width: "100%" }}
                 placeholder="e.g. Bob Verma"
                 value={uploadName}
                 onChange={(e) => setUploadName(e.target.value)}
@@ -143,7 +155,12 @@ export default function SubmitForm({ onSubmitted }) {
             </div>
             <div style={{ flex: 1, minWidth: 160 }}>
               <label className="field-label">Student ID</label>
-              <input placeholder="e.g. S102" value={uploadId} onChange={(e) => setUploadId(e.target.value)} />
+              <input
+                style={{ width: "100%" }}
+                placeholder="e.g. S102"
+                value={uploadId}
+                onChange={(e) => setUploadId(e.target.value)}
+              />
             </div>
           </div>
 
@@ -167,7 +184,12 @@ export default function SubmitForm({ onSubmitted }) {
               <strong>Click to choose a file</strong> or drag it here
             </div>
             <div className="muted">Plain text file, one question per line</div>
-            {file && <div className="filename">📄 {file.name}</div>}
+            {file && (
+              <div className="filename">
+                <FileText size={14} style={{ verticalAlign: "-2px", marginRight: 6 }} />
+                {file.name}
+              </div>
+            )}
             <input
               ref={fileInputRef}
               type="file"

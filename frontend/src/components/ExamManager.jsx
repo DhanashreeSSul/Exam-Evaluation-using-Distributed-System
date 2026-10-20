@@ -1,6 +1,16 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { FileText, Plus, CheckCircle2, Trash2, UploadCloud } from "lucide-react";
 import { api } from "../api";
+
+const emptyQuestion = (n) => ({
+  question_number: n,
+  question_text: "",
+  option_a: "",
+  option_b: "",
+  option_c: "",
+  option_d: "",
+  correct_answer: "",
+});
 
 export default function ExamManager({ onExamActivated }) {
   const [exams, setExams] = useState([]);
@@ -18,9 +28,7 @@ export default function ExamManager({ onExamActivated }) {
   // manual entry form state
   const [showManual, setShowManual] = useState(false);
   const [examName, setExamName] = useState("");
-  const [questions, setQuestions] = useState([
-    { question_number: 1, question_text: "", option_a: "", option_b: "", option_c: "", option_d: "", correct_answer: "" },
-  ]);
+  const [questions, setQuestions] = useState([emptyQuestion(1)]);
 
   const refresh = async () => {
     try {
@@ -57,10 +65,7 @@ export default function ExamManager({ onExamActivated }) {
   };
 
   const addQuestionRow = () => {
-    setQuestions((prev) => [
-      ...prev,
-      { question_number: prev.length + 1, question_text: "", option_a: "", option_b: "", option_c: "", option_d: "", correct_answer: "" },
-    ]);
+    setQuestions((prev) => [...prev, emptyQuestion(prev.length + 1)]);
   };
 
   const removeQuestionRow = (idx) => {
@@ -90,7 +95,7 @@ export default function ExamManager({ onExamActivated }) {
       const result = await api.createExam(examName.trim(), cleaned);
       setMessage(`Exam "${examName}" created with ${result.question_count} questions.`);
       setExamName("");
-      setQuestions([{ question_number: 1, question_text: "", option_a: "", option_b: "", option_c: "", option_d: "", correct_answer: "" }]);
+      setQuestions([emptyQuestion(1)]);
       refresh();
     } catch (err) {
       setMessage("Failed to create exam: " + err.message);
@@ -133,16 +138,16 @@ export default function ExamManager({ onExamActivated }) {
       </p>
 
       {activeExam?.active_exam_id && (
-        <div className="stat-card good" style={{ marginBottom: 16 }}>
+        <div className="stat-card good" style={{ marginBottom: 20 }}>
           <div className="label">Active Exam</div>
-          <div className="value" style={{ fontSize: 18 }}>
+          <div className="value" style={{ fontSize: 20 }}>
             {activeExam.name || activeExam.active_exam_id}
           </div>
         </div>
       )}
 
       <h3 style={{ fontSize: 15 }}>Upload Question Bank</h3>
-      <p className="muted" style={{ fontSize: 13, marginBottom: 8 }}>
+      <p className="muted" style={{ fontSize: 13, marginBottom: 8, lineHeight: 1.9 }}>
         Accepts <strong>.txt</strong>, <strong>.csv</strong>, <strong>.pdf</strong>, or{" "}
         <strong>.docx</strong>. Preferred format — a numbered question with
         options and an answer line:
@@ -194,9 +199,14 @@ export default function ExamManager({ onExamActivated }) {
           />
 
           {questions.map((q, idx) => (
-            <div key={idx} style={{ marginBottom: 14, paddingBottom: 10, borderBottom: "1px solid #eee" }}>
+            <div
+              key={idx}
+              style={{ marginBottom: 14, paddingBottom: 10, borderBottom: "1px solid var(--border)" }}
+            >
               <div style={{ display: "flex", gap: 8, marginBottom: 6, alignItems: "center" }}>
-                <span style={{ width: 24 }}>{q.question_number}.</span>
+                <span style={{ width: 24, fontFamily: "var(--font-mono)", color: "var(--accent)" }}>
+                  {q.question_number}.
+                </span>
                 <input
                   type="text"
                   placeholder="Question text"
@@ -218,7 +228,7 @@ export default function ExamManager({ onExamActivated }) {
                   placeholder="Correct (A/B/C/D)"
                   value={q.correct_answer}
                   onChange={(e) => updateQuestion(idx, "correct_answer", e.target.value)}
-                  style={{ width: 110 }}
+                  style={{ width: 130 }}
                 />
               </div>
             </div>
@@ -234,9 +244,9 @@ export default function ExamManager({ onExamActivated }) {
         </form>
       )}
 
-      {message && <p className="muted" style={{ marginBottom: 16 }}>{message}</p>}
+      {message && <div className="message-box info" style={{ marginBottom: 16 }}>{message}</div>}
 
-      <h3 style={{ fontSize: 15 }}>Existing Exams</h3>
+      <h3 style={{ fontSize: 15, marginTop: 8 }}>Existing Exams</h3>
       <p className="muted" style={{ fontSize: 13, marginBottom: 8 }}>
         Click an exam's name to view its question paper.
       </p>
@@ -256,17 +266,17 @@ export default function ExamManager({ onExamActivated }) {
             </tr>
           )}
           {exams.map((e) => (
-            <>
-              <tr key={e.exam_id}>
+            <Fragment key={e.exam_id}>
+              <tr>
                 <td>
                   <span
                     onClick={() => handleToggleView(e.exam_id)}
-                    style={{ cursor: "pointer", textDecoration: "underline", fontWeight: 600 }}
+                    style={{ cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 3, fontWeight: 600 }}
                   >
                     {e.name}
                   </span>
                 </td>
-                <td>{e.exam_id}</td>
+                <td style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{e.exam_id}</td>
                 <td>
                   {e.is_active ? (
                     <span className="badge good">ACTIVE</span>
@@ -284,7 +294,7 @@ export default function ExamManager({ onExamActivated }) {
               </tr>
               {expandedExamId === e.exam_id && (
                 <tr>
-                  <td colSpan="4" style={{ background: "rgba(0,0,0,0.02)" }}>
+                  <td colSpan="4" style={{ background: "var(--bg-2)" }}>
                     {loadingQuestions ? (
                       <p className="muted">Loading questions…</p>
                     ) : expandedQuestions.length === 0 ? (
@@ -297,7 +307,7 @@ export default function ExamManager({ onExamActivated }) {
                               {q.question_number}. {q.question_text}
                             </div>
                             {(q.option_a || q.option_b || q.option_c || q.option_d) && (
-                              <div style={{ paddingLeft: 16, marginTop: 4, fontSize: 14 }}>
+                              <div style={{ paddingLeft: 16, marginTop: 4, fontSize: 14, color: "var(--muted)" }}>
                                 {q.option_a && <div>A. {q.option_a}</div>}
                                 {q.option_b && <div>B. {q.option_b}</div>}
                                 {q.option_c && <div>C. {q.option_c}</div>}
@@ -311,7 +321,7 @@ export default function ExamManager({ onExamActivated }) {
                   </td>
                 </tr>
               )}
-            </>
+            </Fragment>
           ))}
         </tbody>
       </table>

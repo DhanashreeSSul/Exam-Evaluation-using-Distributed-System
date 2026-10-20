@@ -9,6 +9,8 @@ import {
   ClipboardCheck,
   GraduationCap,
   FileText,
+  GitBranch,
+  Link2,
 } from "lucide-react";
 import { api } from "./api";
 import Dashboard from "./components/Dashboard";
@@ -20,21 +22,34 @@ import FailurePanel from "./components/FailurePanel";
 import MarkingDashboard from "./components/MarkingDashboard";
 import ExamManager from "./components/ExamManager";
 import SynchronizationPanel from "./components/SynchronizationPanel";
-import { GitBranch } from "lucide-react";
 import LedgerPanel from "./components/LedgerPanel";
-import { Link2 } from "lucide-react";
 
-const TABS = [
-  { key: "Dashboard", icon: LayoutDashboard },
-  { key: "Workers", icon: Server },
-  { key: "Tasks", icon: ListChecks },
-  { key: "Marking Dashboard", icon: ClipboardCheck },
-  { key: "Exams", icon: FileText },
-  { key: "Events", icon: Activity },
-  { key: "Submit", icon: UploadCloud },
-  { key: "Failure Simulation", icon: ShieldAlert },
-  { key: "Sync", icon: GitBranch },
-  { key: "Ledger", icon: Link2 }
+const NAV = [
+  {
+    section: "Monitor",
+    items: [
+      { key: "Dashboard", icon: LayoutDashboard },
+      { key: "Workers", icon: Server },
+      { key: "Tasks", icon: ListChecks },
+      { key: "Events", icon: Activity },
+    ],
+  },
+  {
+    section: "Exam",
+    items: [
+      { key: "Exams", icon: FileText },
+      { key: "Submit", icon: UploadCloud },
+      { key: "Marking Dashboard", icon: ClipboardCheck },
+    ],
+  },
+  {
+    section: "Distributed",
+    items: [
+      { key: "Sync", icon: GitBranch },
+      { key: "Ledger", icon: Link2 },
+      { key: "Failure Simulation", icon: ShieldAlert },
+    ],
+  },
 ];
 
 export default function App() {
@@ -72,29 +87,26 @@ export default function App() {
 
   useEffect(() => {
     refreshAll();
-    // Fallback polling: still used for tabs like Dashboard/Workers/Tasks
-    // that aggregate state rather than append events.
     const interval = setInterval(refreshAll, 2000);
     return () => clearInterval(interval);
   }, [refreshAll]);
 
   useEffect(() => {
-    // Message-oriented live channel: the coordinator pushes each event the
-    // instant it's logged, so the Events tab updates with zero polling
-    // delay - a genuinely different communication pattern from the
-    // request/response calls above.
+    // Live channel: coordinator pushes each event the instant it is logged.
     const close = api.connectEventStream(
       (message) => {
         if (message.type === "event") {
-          setEvents((prev) => [
-            {
-              event: message.event,
-              process: message.process,
-              lamport_clock: message.lamport_clock,
-              timestamp: message.timestamp,
-            },
-            ...prev,
-          ].slice(0, 100));
+          setEvents((prev) =>
+            [
+              {
+                event: message.event,
+                process: message.process,
+                lamport_clock: message.lamport_clock,
+                timestamp: message.timestamp,
+              },
+              ...prev,
+            ].slice(0, 100)
+          );
         }
       },
       (isOpen) => setLiveConnected(isOpen)
@@ -102,43 +114,72 @@ export default function App() {
     return close;
   }, []);
 
-  return (
-    <div className="app">
-      <div className="app-header">
-        <div className="app-header-top">
-          <GraduationCap size={26} />
-          <h1>Distributed Exam Evaluation System</h1>
-        </div>
-        <p className="subtitle">Teacher Dashboard — Coordinator, Workers &amp; Marking, all in one place</p>
-        <span className={`connection-pill ${connected ? "online" : "offline"}`}>
-          <span className="dot" />
-          {connected ? "Connected to Coordinator (localhost:8000)" : "Cannot reach Coordinator — is it running?"}
-        </span>
-        <span className={`connection-pill ${liveConnected ? "online" : "offline"}`} style={{ marginLeft: 8 }}>
-          <span className="dot" />
-          {liveConnected ? "Live event stream connected (WebSocket)" : "Live event stream offline"}
-        </span>
-      </div>
+  const section = NAV.find((g) => g.items.some((i) => i.key === tab))?.section;
 
-      <div className="tabs">
-        {TABS.map(({ key, icon: Icon }) => (
-          <div key={key} className={`tab ${tab === key ? "active" : ""}`} onClick={() => setTab(key)}>
-            <Icon />
-            {key}
+  return (
+    <div className="shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <div className="brand-mark">
+            <GraduationCap size={21} />
+          </div>
+          <div>
+            <div className="brand-name">Exam Control Room</div>
+            <div className="brand-sub">Distributed Evaluation</div>
+          </div>
+        </div>
+
+        {NAV.map((group) => (
+          <div key={group.section} style={{ display: "contents" }}>
+            <div className="nav-section">{group.section}</div>
+            {group.items.map(({ key, icon: Icon }) => (
+              <div
+                key={key}
+                role="button"
+                tabIndex={0}
+                className={`nav-item ${tab === key ? "active" : ""}`}
+                onClick={() => setTab(key)}
+                onKeyDown={(e) => e.key === "Enter" && setTab(key)}
+              >
+                <Icon />
+                {key}
+              </div>
+            ))}
           </div>
         ))}
-      </div>
 
-      {tab === "Dashboard" && <Dashboard state={state} />}
-      {tab === "Workers" && <WorkerTable workers={workers} />}
-      {tab === "Tasks" && <TaskTable tasks={tasks} />}
-      {tab === "Marking Dashboard" && <MarkingDashboard summary={markingSummary} tasks={tasks} />}
-      {tab === "Exams" && <ExamManager onExamActivated={refreshAll} />}
-      {tab === "Events" && <EventsPanel events={events} electionLogs={electionLogs} />}
-      {tab === "Submit" && <SubmitForm onSubmitted={refreshAll} />}
-      {tab === "Failure Simulation" && <FailurePanel workers={workers} onAction={refreshAll} />}
-      {tab === "Sync" && <SynchronizationPanel />}
-      {tab === "Ledger" && <LedgerPanel />}
+        <div className="sidebar-foot">coordinator · localhost:8000</div>
+      </aside>
+
+      <main className="main">
+        <div className="topbar">
+          <div>
+            <div className="crumb">{section}</div>
+            <h1>{tab}</h1>
+          </div>
+          <div className="topbar-chips">
+            <span className={`connection-pill ${connected ? "online" : "offline"}`}>
+              <span className="dot" />
+              {connected ? "Coordinator online" : "Coordinator unreachable"}
+            </span>
+            <span className={`connection-pill ${liveConnected ? "online" : "offline"}`}>
+              <span className="dot" />
+              {liveConnected ? "Live stream" : "Stream offline"}
+            </span>
+          </div>
+        </div>
+
+        {tab === "Dashboard" && <Dashboard state={state} workers={workers} />}
+        {tab === "Workers" && <WorkerTable workers={workers} state={state} />}
+        {tab === "Tasks" && <TaskTable tasks={tasks} />}
+        {tab === "Marking Dashboard" && <MarkingDashboard summary={markingSummary} tasks={tasks} />}
+        {tab === "Exams" && <ExamManager onExamActivated={refreshAll} />}
+        {tab === "Events" && <EventsPanel events={events} electionLogs={electionLogs} />}
+        {tab === "Submit" && <SubmitForm onSubmitted={refreshAll} />}
+        {tab === "Failure Simulation" && <FailurePanel workers={workers} onAction={refreshAll} />}
+        {tab === "Sync" && <SynchronizationPanel />}
+        {tab === "Ledger" && <LedgerPanel />}
+      </main>
     </div>
   );
 }

@@ -1,8 +1,12 @@
 # ============================================
-# worker/worker.py — FULL FILE (with --host added)
+# worker/worker.py — FULL FILE
+# Supports both docker-compose (CLI flags) and Kubernetes (env vars / pod name)
 # ============================================
 import argparse
+import os
 import random
+import re
+import socket
 import threading
 import time
 from typing import List
@@ -83,6 +87,7 @@ def status():
 
 registered = {"done": False}
 
+
 def heartbeat_loop(coordinator_url: str, worker_id: int, port: int, host: str):
     while True:
         try:
@@ -96,23 +101,46 @@ def heartbeat_loop(coordinator_url: str, worker_id: int, port: int, host: str):
                     registered["done"] = True
                     print(f"[Worker {worker_id}] Registered with coordinator at {coordinator_url}")
             elif state["status"] == "ACTIVE":
-                requests.post(
+                resp = requests.post(
                     f"{coordinator_url}/workers/{worker_id}/heartbeat",
                     json={"lamport_clock": clock.value},
                     timeout=2,
                 )
+                # Coordinator restarted with a fresh database -> register again
+                if resp.status_code == 404:
+                    registered["done"] = False
+                    print(f"[Worker {worker_id}] Coordinator lost us, re-registering...")
         except Exception:
             pass
         time.sleep(1)
 
 
+def resolve_worker_id():
+    """WORKER_ID env var, else the number at the end of the pod name (worker-0 -> 1)."""
+    env_id = os.environ.get("WORKER_ID")
+    if env_id:
+        return int(env_id)
+    name = os.environ.get("POD_NAME") or socket.gethostname()
+    match = re.search(r"-(\d+)$", name)
+    return int(match.group(1)) + 1 if match else None
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Distributed Exam Evaluation Worker")
-    parser.add_argument("--id", type=int, required=True, help="Unique worker ID")
-    parser.add_argument("--port", type=int, required=True, help="Port to run this worker on")
-    parser.add_argument("--coordinator", type=str, default="http://localhost:8000", help="Coordinator base URL")
-    parser.add_argument("--host", type=str, default="localhost", help="Hostname this worker is reachable at")
+    parser.add_argument("--id", type=int, default=resolve_worker_id(),
+                        help="Unique worker ID (default: WORKER_ID env or pod ordinal + 1)")
+    parser.add_argument("--port", type=int, default=int(os.environ.get("WORKER_PORT", 8001)),
+                        help="Port to run this worker on (default: WORKER_PORT env or 8001)")
+    parser.add_argument("--coordinator", type=str,
+                        default=os.environ.get("COORDINATOR_URL", "http://localhost:8000"),
+                        help="Coordinator base URL (default: COORDINATOR_URL env)")
+    parser.add_argument("--host", type=str,
+                        default=os.environ.get("WORKER_HOST", "localhost"),
+                        help="Hostname this worker is reachable at (default: WORKER_HOST env)")
     args = parser.parse_args()
+
+    if args.id is None:
+        parser.error("Worker ID required: pass --id, set WORKER_ID, or run as a StatefulSet pod (worker-N).")
 
     state["worker_id"] = args.id
     state["port"] = args.port
@@ -124,5 +152,5 @@ if __name__ == "__main__":
     )
     heartbeat_thread.start()
 
-    print(f"[Worker {args.id}] Starting on port {args.port} ...")
+    print(f"[Worker {args.id}] Starting on port {args.port} (host {args.host}) ...")
     uvicorn.run(app, host="0.0.0.0", port=args.port)

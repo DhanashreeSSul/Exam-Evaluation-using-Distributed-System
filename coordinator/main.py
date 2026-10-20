@@ -51,6 +51,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+import ledger_demo                       # <-- ADD
+app.include_router(ledger_demo.router)   # <-- ADD
+
 # ---------------- WebSocket Connection Manager ----------------
 
 class ConnectionManager:

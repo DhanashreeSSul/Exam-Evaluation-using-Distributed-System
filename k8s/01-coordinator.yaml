@@ -1,0 +1,58 @@
+# Persistent storage so the SQLite database (tasks, ledger, workers) survives pod restarts
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: coordinator-data
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coordinator
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate          # SQLite + one volume: never run two coordinators at once
+  selector:
+    matchLabels:
+      app: coordinator
+  template:
+    metadata:
+      labels:
+        app: coordinator
+    spec:
+      containers:
+        - name: coordinator
+          image: exam-coordinator:v1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: /workers
+              port: 8000
+            initialDelaySeconds: 3
+            periodSeconds: 3
+          volumeMounts:
+            - name: data
+              mountPath: /database
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: coordinator-data
+---
+# Stable name "coordinator" that workers and the frontend use
+apiVersion: v1
+kind: Service
+metadata:
+  name: coordinator
+spec:
+  selector:
+    app: coordinator
+  ports:
+    - port: 8000
+      targetPort: 8000

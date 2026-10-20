@@ -1,0 +1,159 @@
+.tl-controls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.tl-controls .segmented {
+  margin-bottom: 0;
+}
+
+.tl-wrap {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-2);
+  overflow: hidden;
+}
+
+.tl-labels {
+  flex: 0 0 124px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+}
+
+.tl-label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.tl-label.coord {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.tl-scroll {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.tl-svg {
+  display: block;
+}
+
+.tl-svg text {
+  font-family: var(--font-mono);
+}
+
+.tl-lane {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+  stroke-dasharray: 2 6;
+}
+
+.tl-guide {
+  stroke: var(--border);
+  stroke-width: 1;
+  opacity: 0.45;
+}
+
+.tl-axis {
+  fill: var(--muted);
+  font-size: 10px;
+  text-anchor: middle;
+}
+
+.tl-node {
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.tl-node text {
+  text-anchor: middle;
+}
+
+.tl-lbl {
+  font-size: 9.5px;
+  fill: var(--text);
+}
+
+.tl-sub {
+  font-size: 8.5px;
+  fill: var(--muted);
+}
+
+.tl-sel {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 1.2;
+}
+
+.tl-info {
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tl-info .chip {
+  margin-left: 8px;
+}
+
+.tl-chain {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.tl-chain strong {
+  color: var(--accent);
+}
+
+.tl-ok {
+  color: var(--success-text);
+}
+
+.tl-bad {
+  color: var(--danger-text);
+}
+
+.tl-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.tl-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tl-legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+@media (max-width: 900px) {
+  .tl-labels {
+    flex-basis: 96px;
+  }
+}

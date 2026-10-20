@@ -1,0 +1,49 @@
+# Headless service: gives every worker pod its own stable DNS name
+# e.g. worker-0.worker, worker-1.worker  (the coordinator calls workers on these)
+apiVersion: v1
+kind: Service
+metadata:
+  name: worker
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: worker
+  ports:
+    - port: 8001
+      targetPort: 8001
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: worker
+spec:
+  serviceName: worker
+  replicas: 3                       # change this, or use: kubectl scale statefulset worker --replicas=5
+  podManagementPolicy: Parallel     # start all workers together
+  selector:
+    matchLabels:
+      app: worker
+  template:
+    metadata:
+      labels:
+        app: worker
+    spec:
+      terminationGracePeriodSeconds: 5   # a deleted pod dies fast, so the failure is visible
+      containers:
+        - name: worker
+          image: exam-worker:v1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8001
+          env:
+            - name: POD_NAME                 # worker-0 / worker-1 / ... -> worker ID = ordinal + 1
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: WORKER_PORT
+              value: "8001"
+            - name: WORKER_HOST              # must come after POD_NAME
+              value: "$(POD_NAME).worker"
+            - name: COORDINATOR_URL
+              value: "http://coordinator:8000"

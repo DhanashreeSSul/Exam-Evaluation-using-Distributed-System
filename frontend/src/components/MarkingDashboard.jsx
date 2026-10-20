@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { ClipboardCheck, ChevronDown, ChevronRight } from "lucide-react";
 
 export default function MarkingDashboard({ summary, tasks }) {
@@ -16,7 +16,7 @@ export default function MarkingDashboard({ summary, tasks }) {
         </h2>
         <p className="panel-sub">
           Aggregated evaluation results across every task the workers have marked, using
-          answer key: <strong>{summary.answer_key?.join(", ")}</strong>
+          answer key: <code>{summary.answer_key?.join(", ")}</code>
         </p>
 
         <div className="grid">
@@ -38,7 +38,7 @@ export default function MarkingDashboard({ summary, tasks }) {
           </div>
         </div>
 
-        <h2 style={{ fontSize: 15, marginTop: 4 }}>Question-wise Accuracy</h2>
+        <h3 style={{ fontSize: 15, margin: "4px 0 14px" }}>Question-wise Accuracy</h3>
         {summary.question_stats?.length === 0 && (
           <p className="muted">No evaluated sheets yet — question stats will appear here.</p>
         )}
@@ -58,66 +58,70 @@ export default function MarkingDashboard({ summary, tasks }) {
       <div className="panel">
         <h2>Per-Student Marking Detail</h2>
         <p className="panel-sub">Click a row to see exactly which questions were marked right or wrong.</p>
-        <table>
-          <thead>
-            <tr>
-              <th></th>
-              <th>Task ID</th>
-              <th>Student</th>
-              <th>Worker</th>
-              <th>Score</th>
-            </tr>
-          </thead>
-          <tbody>
-            {completedTasks.length === 0 && (
+        <div style={{ overflowX: "auto" }}>
+          <table>
+            <thead>
               <tr>
-                <td colSpan="5" className="muted">
-                  No completed evaluations yet.
-                </td>
+                <th></th>
+                <th>Task ID</th>
+                <th>Student</th>
+                <th>Worker</th>
+                <th>Score</th>
               </tr>
-            )}
-            {completedTasks.map((t) => (
-              <>
-                <tr
-                  key={t.task_id}
-                  className="task-detail-row"
-                  onClick={() => setExpanded(expanded === t.task_id ? null : t.task_id)}
-                >
-                  <td>{expanded === t.task_id ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</td>
-                  <td>{t.task_id}</td>
-                  <td>
-                    {t.student_name} ({t.student_id})
-                  </td>
-                  <td>Worker {t.assigned_worker}</td>
-                  <td>
-                    {t.score}/{t.total}
+            </thead>
+            <tbody>
+              {completedTasks.length === 0 && (
+                <tr>
+                  <td colSpan="5" className="muted">
+                    No completed evaluations yet.
                   </td>
                 </tr>
-                {expanded === t.task_id && t.breakdown && (
-                  <tr>
-                    <td colSpan="5" style={{ padding: 0, border: "none" }}>
-                      <div className="breakdown-box">
-                        <div className="breakdown-grid">
-                          {t.breakdown.map((b) => (
-                            <div
-                              key={b.question}
-                              className={`breakdown-cell ${b.is_correct ? "correct" : "incorrect"}`}
-                            >
-                              <strong>Q{b.question}:</strong> {b.student_answer}
-                              {!b.is_correct && (
-                                <span className="muted"> (correct: {b.correct_answer})</span>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
+              )}
+              {completedTasks.map((t) => (
+                <Fragment key={t.task_id}>
+                  <tr
+                    className="task-detail-row"
+                    onClick={() => setExpanded(expanded === t.task_id ? null : t.task_id)}
+                  >
+                    <td>{expanded === t.task_id ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</td>
+                    <td style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{t.task_id}</td>
+                    <td>
+                      {t.student_name}{" "}
+                      <span className="muted" style={{ fontFamily: "var(--font-mono)" }}>
+                        ({t.student_id})
+                      </span>
+                    </td>
+                    <td style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>W{t.assigned_worker}</td>
+                    <td style={{ fontFamily: "var(--font-mono)" }}>
+                      {t.score}/{t.total}
                     </td>
                   </tr>
-                )}
-              </>
-            ))}
-          </tbody>
-        </table>
+                  {expanded === t.task_id && t.breakdown && (
+                    <tr>
+                      <td colSpan="5" style={{ padding: 0, border: "none" }}>
+                        <div className="breakdown-box">
+                          <div className="breakdown-grid">
+                            {t.breakdown.map((b) => (
+                              <div
+                                key={b.question}
+                                className={`breakdown-cell ${b.is_correct ? "correct" : "incorrect"}`}
+                              >
+                                <strong>Q{b.question}:</strong> {b.student_answer}
+                                {!b.is_correct && (
+                                  <span className="muted"> (correct: {b.correct_answer})</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </>
   );
